@@ -15,7 +15,8 @@ import java.util.Properties;
 public class GrepClient {
 
     ArrayList<Requester> req_list;
-	
+	String query = "";
+
 	GrepClient() {
 		Properties prop = new Properties();
 		String[] ports = null;
@@ -41,7 +42,10 @@ public class GrepClient {
 	
 	private class Requester extends Thread {
 		Socket sock = null;
-        public Requester(String hostName, String portOne) {
+        String hostName = null, portOne = null;
+        public Requester(String _hostName, String _portOne) {
+            hostName = _hostName;
+            portOne = _portOne;
 			System.out.printf("Client: Construct: Querying %s %s\n", hostName, portOne);
 	        try {
 	            sock = new Socket(hostName, Integer.parseInt(portOne));
@@ -77,10 +81,10 @@ public class GrepClient {
 	        }
 
 	        System.out.println("Client: Hi");
-	        out.println("grep INFO ^This");
+	        out.println("grep" + query);
 	        try {
 	        	while ((servLine = in.readLine()) != null) {
-	        		System.out.println("Client: " + servLine);
+	        		System.out.println("(" + hostName + "," + portOne + "): " + servLine);
 	        	}
 	        } catch (IOException e) {
 	            System.err.println("Couldn't read for "
@@ -92,11 +96,18 @@ public class GrepClient {
 
 	}
 	
-	public void startrun() {
+	public void startrun(String[] arg) {
 		// TODO Auto-generated method stub
+        if (arg.length == 0) {
+            return;
+        }
+        for (String cli : arg)
+            query += " " + cli;
+        System.out.println(query);
 		for (Requester req: req_list) {
 			req.start();
 		}
+		joinThreads();
  	}
 
 	public void joinThreads() {
@@ -115,8 +126,7 @@ public class GrepClient {
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		GrepClient client = new GrepClient();
-		client.startrun();
-		client.joinThreads();
+		client.startrun(args);
 	}
 
 }
