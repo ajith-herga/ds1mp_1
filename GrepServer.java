@@ -1,4 +1,3 @@
-package Distributed1;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -12,6 +11,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 public class GrepServer {
@@ -19,6 +20,7 @@ public class GrepServer {
 		
 	ServerSocket sock = null;
 	String hostname = null, localPort = null;
+	Acceptor acceptor;
 	
 	public GrepServer() {
 		System.out.println("Listen: Construct Start");
@@ -39,6 +41,7 @@ public class GrepServer {
 		try {
 			hostname = InetAddress.getLocalHost().getHostName();
 			localPort = Integer.toString(sock.getLocalPort());
+			System.out.println("Server running on host: "+ hostname + "port: " + localPort);
 		} catch (UnknownHostException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -58,27 +61,22 @@ public class GrepServer {
 				prop.load(new FileInputStream("config.properties"));
 				e.printStackTrace();
 			}
-			try {
-				ports = prop.getProperty(hostname);
-				if (ports  == null) {
-					prop.setProperty(hostname, localPort);
-				} else if (!ports.contains(localPort)) {
-					ports = ports + "," + localPort;
-					prop.put(hostname, ports);
-				} else {
-					System.out.println("Unhandled Case, Ports already in file");
-				}
-	    	} catch (NullPointerException e) {
+			ports = prop.getProperty(hostname);
+			if (ports  == null) {
 				prop.setProperty(hostname, localPort);
-	    		e.printStackTrace();
-	    	}
-			prop.store(new FileOutputStream("config.properties"), null);			
+			} else if (!ports.contains(localPort)) {
+				ports = ports + "," + localPort;
+				prop.put(hostname, ports);
+			} else {
+				System.out.println("Unhandled Case, Ports already in file");
+			}
+			prop.store(new FileOutputStream("config.properties"), null);		
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 		
-	private class Worker implements Runnable {
+	private class Worker extends Thread {
 		
 		Socket clientSocket;
 		
@@ -141,9 +139,9 @@ public class GrepServer {
 	}
 
 		
-	private class Acceptor implements Runnable {
+	private class Acceptor extends Thread {
 		Socket clientSocket = null;
-
+		List<Worker> workers = new ArrayList<Worker>();
 
 		public void run() {
 			// TODO Auto-generated method stub
@@ -157,9 +155,9 @@ public class GrepServer {
 				    System.exit(-1);
 				}
 				System.out.println("Acceptor: Got Connection");
-				Worker work = new Worker(clientSocket);
-				Thread t = new Thread(work);
-				t.start();
+				Worker worker = new Worker(clientSocket);
+				worker.start();
+				workers.add(worker);
 			}
 		}
 	
@@ -167,19 +165,71 @@ public class GrepServer {
 
 	public void startrun() {
 		// TODO Auto-generated method stub
-		Acceptor accept = new Acceptor();
-		Thread t = new Thread(accept);
-		t.start();
+		acceptor = new Acceptor();
+		acceptor.start();
 	}
 	
+	public void shutdown(){
+		acceptor.interrupt();
+    	try {
+			System.out.println("Updating config");
+    		Properties prop = new Properties();
+    		prop.load(new FileInputStream("config.properties"));
+			String ports = prop.getProperty(hostname);
+			if (ports  != null && ports.contains(localPort)) {
+				System.out.println("Old Ports for this host - "+ports);
+				System.out.println(localPort);
+				ports = ports.replaceAll(localPort, "");
+				ports = ports.replaceAll(",,", ",");
+				if(ports.startsWith(","))
+					ports = ports.substring(1);
+				if(ports.endsWith(","))
+					ports = ports.substring(0,ports.length()-1);
+				System.out.println("New Ports for this host - "+ ports);
+				prop.put(hostname, ports);
+			}
+			prop.store(new FileOutputStream("config.properties"), null);		
+		} catch (FileNotFoundException e) {
+			System.out.println("Config file not found.");
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+/*		try {
+			sock.close();
+		} catch (IOException e) {
+			System.out.println("Caught Exception while closing the socket");
+			e.printStackTrace();
+		}
+*/		System.out.println("Server:stopped ");		
+	}
 	/**
 	 * @param args
 	 */
 	public static void main(String[] args) {
 		System.out.println("Main: Begin");
-		GrepServer serv = new GrepServer();
+		final GrepServer serv = new GrepServer();
+		System.out.println("Server: Port Acquired");		
+		Runtime.getRuntime().addShutdownHook(new Thread(){
+			@Override
+			public void run(){
+				System.out.println("Server: Trying to stop ");		
+				serv.shutdown();
+			}
+		});
+		System.out.println("Server: Shutdown hook attached");		
 		serv.startrun();
+		System.out.println("Server:started ");		
 		System.out.println("Main: Done");
-		while(true);
+		while(true){
+			try {
+				Thread.sleep(1000L);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				System.out.println("Main interrupted!");
+				e.printStackTrace();
+			}
+		}
 	}
 }
