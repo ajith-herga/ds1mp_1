@@ -29,7 +29,7 @@ public class GrepServer {
 			    sock = new ServerSocket(i);
 			} 
 			catch (IOException e) {
-			    System.out.printf("Could not listen on port: %d, Trying %d", i, i+1);
+			    System.out.printf("Could not listen on port: %d, Trying %d\n", i, i+1);
 			    continue;
 			}
 			break;
@@ -97,7 +97,7 @@ public class GrepServer {
 					System.out.printf("Worker: Received %s\n", inputLine);
 					if (inputLine.startsWith("grep ")) {
 						String args[] = inputLine.substring(5).split(" ");
-						String command = args[0] + ".*___";
+						String command = args[0] + ".*:";
 						if (args.length == 2) {
 							if (args[1].startsWith("^")) {
 								command += args[1].substring(1);
@@ -186,7 +186,10 @@ public class GrepServer {
 				if(ports.endsWith(","))
 					ports = ports.substring(0,ports.length()-1);
 				System.out.println("New Ports for this host - "+ ports);
-				prop.put(hostname, ports);
+                if(ports.isEmpty())
+                    prop.remove(hostname);
+                else
+				    prop.put(hostname, ports);
 			}
 			prop.store(new FileOutputStream("config.properties"), null);		
 		} catch (FileNotFoundException e) {
