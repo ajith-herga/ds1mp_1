@@ -1,5 +1,3 @@
-package Distributed1;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -79,7 +77,7 @@ public class GrepClient {
 	        }
 
 	        System.out.println("Client: Hi");
-	        out.println("grep ^2013-09");
+	        out.println("grep INFO ^This");
 	        try {
 	        	while ((servLine = in.readLine()) != null) {
 	        		System.out.println("Client: " + servLine);
