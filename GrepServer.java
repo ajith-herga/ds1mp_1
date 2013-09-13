@@ -27,7 +27,7 @@ public class GrepServer {
 			    sock = new ServerSocket(i);
 			} 
 			catch (IOException e) {
-			    System.out.printf("Could not listen on port: %d", i);
+			    System.out.printf("Could not listen on port: %d, Trying %d", i, i+1);
 			    continue;
 			}
 			break;
@@ -50,8 +50,11 @@ public class GrepServer {
 				System.out.println("Warning, Creating a new config file");
 				File file = new File("config.properties");
 				file.createNewFile();
-				file.exists();
+				if (file.exists()) {
+					System.out.println("File Exists");
+				}
 				//Retrying
+				prop = new Properties();
 				prop.load(new FileInputStream("config.properties"));
 				e.printStackTrace();
 			}
@@ -85,38 +88,53 @@ public class GrepServer {
 		
 		public void run() {
 			System.out.println("Worker: Begin");
+
+			PrintWriter out = null;
+			BufferedReader in = null;
 			try {
-				PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-				BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-				String inputLine, outputLine, cmdOut;
-	
+				String inputLine, cmdOut;
+				out = new PrintWriter(clientSocket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 				if ((inputLine = in.readLine()) != null) {
 					System.out.printf("Worker: Received %s\n", inputLine);
 					if (inputLine.startsWith("grep ")) {
 						String args[] = inputLine.substring(5).split(" ");
-						String command = args[0] + "|" + args[1];
-						String command1[] = {"egrep", command, "/tmp/logfile_group425_45"};
+						String command = args[0] + ".*___";
+						if (args.length == 2) {
+							if (args[1].startsWith("^")) {
+								command += args[1].substring(1);
+							} else {
+								command += ".*" + args[1];
+							}
+						}
+						String command1[] = {"grep", command, "/tmp/logfile_group425_45"};
 						Process p = Runtime.getRuntime().exec(command1);
 						System.out.println("Worker:Command " + command);
 						BufferedReader pin = new BufferedReader(new InputStreamReader(p.getInputStream()));
 						while ((cmdOut = pin.readLine()) != null) {
-							System.out.println(cmdOut);
+							out.println(cmdOut);
 						}
 						p.waitFor();
 						System.out.println("Exit Status " + p.exitValue());
-						outputLine = "Hi There! from Server";
-						out.println(outputLine);
 					} else {
-						outputLine = "Unexpected";
-						out.println(outputLine);
+						out.println("Unexpected");
 					}
 				}
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
+			} finally {
+				if (out != null)
+					out.close();
+				try {
+					if (in != null) 
+						in.close();
+					if (clientSocket != null)
+						clientSocket.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 			}
 			System.out.println("Worker: Ending");
 		}
@@ -147,37 +165,6 @@ public class GrepServer {
 	
     }
 
-	private class Shutdown implements Runnable {
-
-		@Override
-		public void run() {
-			// TODO Auto-generated method stub
-			Properties prop = new Properties();
-			String ports = null;
-		    try {
-		    	prop.load(new FileInputStream("config.properties"));
-				ports = prop.getProperty(hostname);
-					if (ports  != null) {
-						prop.setProperty(hostname, localPort);
-						if (ports.contains(localPort)) {
-							ports = ports + "," + localPort;
-							prop.put(hostname, ports);
-						} else {
-							System.out.println("Ports absent in file");
-						}
-					} else {
-						System.out.println("Hosname absent in file");
-					}
-				prop.store(new FileOutputStream("config.properties"), null);			
-			} catch (FileNotFoundException e) {
-				System.out.println("Could not find file to delete");
-				e.printStackTrace();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		
-	}
 	public void startrun() {
 		// TODO Auto-generated method stub
 		Acceptor accept = new Acceptor();
