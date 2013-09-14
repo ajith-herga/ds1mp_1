@@ -1,4 +1,3 @@
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -97,15 +96,20 @@ public class GrepServer {
 					System.out.printf("Worker: Received %s\n", inputLine);
 					if (inputLine.startsWith("grep ")) {
 						String args[] = inputLine.substring(5).split(" ");
-						String command = args[0] + ".*:";
-						if (args.length == 2) {
+						String command = null;
+                        if (!args[0].endsWith("$"))
+                            command = args[0] + ".*";
+                        else
+                            command = args[0].substring(0, (args[0].length() - 1));
+                        command += ":";
+                        if (args.length == 2) {
 							if (args[1].startsWith("^")) {
 								command += args[1].substring(1);
 							} else {
 								command += ".*" + args[1];
 							}
 						}
-						String command1[] = {"grep", command, "/tmp/logfile_group425_45"};
+						String command1[] = {"grep", command, "/tmp/machine.log_45"};
 						Process p = Runtime.getRuntime().exec(command1);
 						System.out.println("Worker:Command " + command);
 						BufferedReader pin = new BufferedReader(new InputStreamReader(p.getInputStream()));
