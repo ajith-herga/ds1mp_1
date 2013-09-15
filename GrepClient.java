@@ -100,9 +100,9 @@ public class GrepClient {
 	            return;
 	        }
 	        
-	        if (query.equals(" __test")) {
+	        if (query.startsWith(" __test")) {
 	        	String outReq = null;
-	        	tgrep = new TestClientGrep();
+				tgrep = new TestClientGrep(query);
 	        	while ((outReq = tgrep.processInput(null)) != null) {
 	        		out.println(outReq);
 	        	}

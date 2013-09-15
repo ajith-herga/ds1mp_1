@@ -19,6 +19,7 @@ public class TestClientGrep {
     private static final int SEND_GREP = 2;
     private static final int WAIT_PROCESS = 3;
     private static final int CHECK_RESULT = 4;
+	private static final int INVALID = 5;
  
     private int state = WAITING;
 	File file = null;
@@ -27,12 +28,17 @@ public class TestClientGrep {
 	String[] result = null;
 	TestGrepProtocol tgrep = null;
 	int index = 0, diff = 0;
-	String grepString = "grep ERROR ABBOT";
+	String grepString = null;
 
-	TestClientGrep() {
+	TestClientGrep(String testQuery) {
 		file = new File("testlogfile");
 	    try {
 			read = new BufferedReader(new FileReader(file));
+			if (testQuery.length() < 9) {
+				System.err.println("Zero length query, cancel test");
+				state = INVALID;
+		    }
+			grepString = testQuery.substring(7).trim();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
