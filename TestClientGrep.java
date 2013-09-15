@@ -34,8 +34,8 @@ public class TestClientGrep {
 		file = new File("testlogfile");
 	    try {
 			read = new BufferedReader(new FileReader(file));
-			if (testQuery.length() < 9) {
-				System.err.println("Zero length query, cancel test");
+			if (testQuery.length() < 14) {
+				System.err.println("Invalid length query, cancel test");
 				state = INVALID;
 		    }
 			grepString = testQuery.substring(7).trim();
