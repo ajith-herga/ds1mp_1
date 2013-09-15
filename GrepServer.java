@@ -14,52 +14,54 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+/*
+ * The main class for server. The mainstay of a server is the socket on 
+ * which it listens. It finds the useable ports and gets the socket.
+ * The Acceptor is a thread within the server. This takes the socket, binds
+ * on it and listens on it. It also fills the hostname, socket into a config
+ * file so that potential clients can find the server.
+ */
+
 public class GrepServer {
 
-		
+
 	ServerSocket sock = null;
 	String hostname = null, localPort = null;
 	Acceptor acceptor;
-	
+
 	public GrepServer() {
-		System.out.println("Listen: Construct Start");
+		//System.out.println("Listen: Construct Start");
 		for (int i = 1024; i < 1500; i ++) {
 			try {
 			    sock = new ServerSocket(i);
 			} 
 			catch (IOException e) {
-			    System.out.printf("Could not listen on port: %d, Trying %d\n", i, i+1);
+			    System.err.printf("Could not listen on port: %d, Trying %d\n", i, i+1);
 			    continue;
 			}
 			break;
 		}
 		
-		System.out.println("Listen: Construct End");
+		//System.out.println("Listen: Construct End");
 		Properties prop = new Properties();
 		String ports = null;
 		try {
 			hostname = InetAddress.getLocalHost().getHostName();
 			localPort = Integer.toString(sock.getLocalPort());
-			System.out.println("Server running on host: "+ hostname + "port: " + localPort);
+			System.out.println("Running on host: "+ hostname + " port: " + localPort);
 		} catch (UnknownHostException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
+			System.exit(-1);
 		}
 	    try {
 	    	try {
 	    		prop.load(new FileInputStream("config.properties"));
 			} catch (FileNotFoundException e) {
-				System.out.println("Warning, Creating a new config file");
-				File file = new File("config.properties");
-				file.createNewFile();
-				if (file.exists()) {
-					System.out.println("File Exists");
-				}
-				//Retrying
-				prop = new Properties();
-				prop.load(new FileInputStream("config.properties"));
+				System.err.println("Cannot load file, exiting");
 				e.printStackTrace();
+				System.exit(-1);
 			}
+
 			ports = prop.getProperty(hostname);
 			if (ports  == null) {
 				prop.setProperty(hostname, localPort);
@@ -72,20 +74,29 @@ public class GrepServer {
 			prop.store(new FileOutputStream("config.properties"), null);		
 		} catch (IOException e) {
 			e.printStackTrace();
+			System.err.println("IOException, exiting");
+			System.exit(-1);
 		}
 	}
-		
+    /*
+     * The worker works with the sockets that represent the connections from the
+     * clients. Worker thread calls the appropriate protocol to deal with the 
+     * socket based on the packet. Currently supported protocols are test and
+     * grep.
+     */	
 	private class Worker extends Thread {
 		
 		Socket clientSocket;
+		GrepProtocol grep = null;
+		TestGrepProtocol testcase1 = null;
 		
 		public Worker(Socket clientSocket) {
-		    this.clientSocket = clientSocket;	
+		    this.clientSocket = clientSocket;
+		    testcase1 = new TestGrepProtocol(localPort);
+		    grep = new GrepProtocol();
 		}
 		
 		public void run() {
-			System.out.println("Worker: Begin");
-
 			PrintWriter out = null;
 			BufferedReader in = null;
 			try {
@@ -95,37 +106,25 @@ public class GrepServer {
 				if ((inputLine = in.readLine()) != null) {
 					System.out.printf("Worker: Received %s\n", inputLine);
 					if (inputLine.startsWith("grep ")) {
-						String args[] = inputLine.substring(5).split(" ");
-						String command = null;
-                        if (!args[0].endsWith("$"))
-                            command = args[0] + ".*";
-                        else
-                            command = args[0].substring(0, (args[0].length() - 1));
-                        command += ":";
-                        if (args.length == 2) {
-							if (args[1].startsWith("^")) {
-								command += args[1].substring(1);
-							} else {
-								command += ".*" + args[1];
-							}
-						}
-						String command1[] = {"grep", command, "/tmp/machine.log_45"};
-						Process p = Runtime.getRuntime().exec(command1);
-						System.out.println("Worker:Command " + command);
-						BufferedReader pin = new BufferedReader(new InputStreamReader(p.getInputStream()));
-						while ((cmdOut = pin.readLine()) != null) {
+						while ((cmdOut = grep.processInput(inputLine, "/tmp/machine.log_45")) != null) {
 							out.println(cmdOut);
 						}
-						p.waitFor();
-						System.out.println("Exit Status " + p.exitValue());
+					} else if (inputLine.startsWith("test")) {
+						cmdOut = testcase1.processInput(inputLine);
+						while ((inputLine = in.readLine()) != null) {
+							cmdOut = testcase1.processInput(inputLine);
+							if (!cmdOut.equals("None__here")) {
+								out.println(cmdOut);
+								break;
+							}
+						}
 					} else {
 						out.println("Unexpected");
 					}
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+				// Going to return anyway
 			} finally {
 				if (out != null)
 					out.close();
@@ -136,20 +135,21 @@ public class GrepServer {
 						clientSocket.close();
 				} catch (IOException e) {
 					e.printStackTrace();
+					//Going to return anyway
 				}
 			}
-			System.out.println("Worker: Ending");
 		}
 	}
 
-		
+    /*
+     * Acceptor thread listens for connections. On arrival of a connection, a worker is spawned,
+     * and the socket is given to the connection.
+     */
 	private class Acceptor extends Thread {
 		Socket clientSocket = null;
 		List<Worker> workers = new ArrayList<Worker>();
 
 		public void run() {
-			// TODO Auto-generated method stub
-			System.out.println("Acceptor: Start");
 			while (true) {
 				try {
 				    clientSocket = sock.accept();
@@ -158,7 +158,7 @@ public class GrepServer {
 				    System.out.printf("Accept failed for main socket %d", sock.getLocalPort());
 				    System.exit(-1);
 				}
-				System.out.println("Acceptor: Got Connection");
+				//System.out.println("Acceptor: Got Connection");
 				Worker worker = new Worker(clientSocket);
 				worker.start();
 				workers.add(worker);
@@ -168,11 +168,16 @@ public class GrepServer {
     }
 
 	public void startrun() {
-		// TODO Auto-generated method stub
 		acceptor = new Acceptor();
 		acceptor.start();
 	}
 	
+    /*
+     * This is a shutdown thread, this waits for interrupts to acceptor thread.
+     * The accpetor does not attmept to close any channels or sockets, it just 
+     * updates the config file to delete the entry of this server from the 
+     * config.properties file
+     */
 	public void shutdown(){
 		acceptor.interrupt();
     	try {
@@ -199,17 +204,10 @@ public class GrepServer {
 		} catch (FileNotFoundException e) {
 			System.out.println("Config file not found.");
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
-/*		try {
-			sock.close();
-		} catch (IOException e) {
-			System.out.println("Caught Exception while closing the socket");
-			e.printStackTrace();
-		}
-*/		System.out.println("Server:stopped ");		
+		System.out.println("Server:stopped ");		
 	}
 	/**
 	 * @param args
@@ -233,7 +231,6 @@ public class GrepServer {
 			try {
 				Thread.sleep(1000L);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				System.out.println("Main interrupted!");
 				e.printStackTrace();
 			}

@@ -1,21 +1,31 @@
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Properties;
 
+/* This is the main client class. Connects to servers and sends queries to servers.
+ * The queries are based on the commandline string sent to the client. There might
+ * be multiple servers. The server information is readin from config.properties.
+ * Client thus has requester objects which run threads foreach server.
+ */
+
+ /*
+  * Testmode is a special mode for the client. The client needs to maintain test results
+  * for each of the requester. The test results are compiled from each of the requestor
+  * and printed out.
+  */
 public class GrepClient {
 
     ArrayList<Requester> req_list;
 	String query = "";
+    boolean testmode = false;
+    int diff = 0;
 
 	GrepClient() {
 		Properties prop = new Properties();
@@ -39,31 +49,39 @@ public class GrepClient {
 			e.printStackTrace();
 		}
 	}
-	
+	/* 
+     * The requester thread gets the host/port information. 
+     * thread tires to connect to the remote server. Based on the
+     * command line, the protocol used to talk to the server is 
+     * different.
+     * The supported protocols are grep and test.
+     */
 	private class Requester extends Thread {
 		Socket sock = null;
         String hostName = null, portOne = null;
+        TestClientGrep tgrep = null;
+        int diff = 0;
+
         public Requester(String _hostName, String _portOne) {
             hostName = _hostName;
             portOne = _portOne;
-			System.out.printf("Client: Construct: Querying %s %s\n", hostName, portOne);
+			System.out.printf("Client: Construct: Reg Servers: %s %s\n",
+			                  hostName, portOne);
 	        try {
 	            sock = new Socket(hostName, Integer.parseInt(portOne));
 	        } catch (UnknownHostException e) {
-	            System.err.println("Don't know about host: localhost.");
+	            System.err.println("Don't know about host: "+ hostName + " " + portOne);
 	            return;
 	        } catch (IOException e) {
-	            System.err.println("Couldn't get socket for "
-	                               + "the connection to: localhost.");
+	            System.err.println("No socket for " + hostName + " " + portOne);
 	            return;
 	        }
-			System.out.println("Client: Construct Done");
+			//System.out.println("Client: Construct Done");
         }
 
 		@Override
 		public void run() {
-			// TODO Auto-generated method stub
-			System.out.println("Client: Thread Start Send");
+			//System.out.println("Client: Thread Start Send");
 			PrintWriter out = null;
 	        BufferedReader in = null;
 	        String servLine = null;
@@ -75,35 +93,49 @@ public class GrepClient {
 	            in = new BufferedReader(new InputStreamReader(
 	                                        sock.getInputStream()));
 	        } catch (IOException e) {
-	            System.err.println("Couldn't get I/O for "
-	                               + "the connection to: localhost.");
+	            System.err.println("No Buffered I/O for " + hostName + " " + portOne);
 	            return;
 	        }
-
-	        System.out.println("Client: Hi");
-	        out.println("grep" + query);
+	        
+	        if (query.equals(" __test")) {
+	        	String outReq = null;
+	        	tgrep = new TestClientGrep();
+	        	while ((outReq = tgrep.processInput(null)) != null) {
+	        		out.println(outReq);
+	        	}
+	        	testmode = true;
+	        } else {
+	        	out.println("grep" + query);
+	        }
+	        
 	        try {
 	        	while ((servLine = in.readLine()) != null) {
-	        		System.out.println("(" + hostName + "," + portOne + "): " + servLine);
+	        		if (!testmode) {
+	        			System.out.println("(" + hostName + "," + portOne + "): " + servLine);
+	        		} else {
+	        			tgrep.processInput(servLine);
+	        		}
+	        	}
+	        	if (testmode) {
+	        		System.out.println("TestMode: Diff is " + tgrep.diff);
 	        	}
 	        } catch (IOException e) {
-	            System.err.println("Couldn't read for "
-                        + "the connection to: localhost.");
+	            System.err.println("Couldnot read from Buffered I/O " + hostName + " " + portOne);
 	            return;
 	        }
-			System.out.println("Client: Thread Finish Send");
+			//System.out.println("Client: Thread Finish Send");
 		}
 
 	}
 	
 	public void startrun(String[] arg) {
-		// TODO Auto-generated method stub
         if (arg.length == 0) {
+			System.out.println("Client: Empty query, return");
             return;
         }
         for (String cli : arg)
             query += " " + cli;
-        System.out.println(query);
+        //System.out.println(query);
 		for (Requester req: req_list) {
 			req.start();
 		}
@@ -114,8 +146,18 @@ public class GrepClient {
 		for (Requester req: req_list) {
 			try {
 				req.join();
+				if (testmode) {
+					diff += req.diff;
+				}
 			} catch (InterruptedException e) {
 				e.printStackTrace();
+			}
+		}
+		if (testmode) {
+			if (diff == 0) {
+				System.out.println("Test mode, test passed");
+			} else {
+				System.out.println("Test mode, test failed");
 			}
 		}
 	}
@@ -124,7 +166,6 @@ public class GrepClient {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		// TODO Auto-generated method stub
 		GrepClient client = new GrepClient();
 		client.startrun(args);
 	}
