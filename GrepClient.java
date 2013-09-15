@@ -45,6 +45,9 @@ public class GrepClient {
 	    	    	req_list.add(new Requester((String)hostname, portOne));
 	    	    }
 	    	}
+			if (req_list.size() == 0) {
+				System.out.println("No Machines, Exit");
+		    }
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
