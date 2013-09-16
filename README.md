@@ -1,4 +1,4 @@
 dsmp1
 =====
 
-Code for Distributed Systems: MP1
+This is a distributed log querier.
