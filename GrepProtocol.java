@@ -40,29 +40,29 @@ public class GrepProtocol {
     public String processInput(String inputLine, String filePath) {
  
         if (state == WAITING) {
-			String args[] = inputLine.substring(5).split(" ");
-			String command = null;
+            String args[] = inputLine.substring(5).split(":");
+            String command = null;
             if (!args[0].endsWith("$"))
                 command = args[0] + ".*";
             else
                 command = args[0].substring(0, (args[0].length() - 1));
             command += ":";
-			if (args.length == 2) {
-				if (args[1].startsWith("^")) {
-					command += args[1].substring(1);
-				} else {
-					command += ".*" + args[1];
-				}
-			}
-			String command1[] = {"grep", command, filePath};
-			try {
-				p = Runtime.getRuntime().exec(command1);
-			} catch (IOException e1) {
-				e1.printStackTrace();
-				Cleanup();
-				state = INVALID;
-				return null;
-			}
+            if (args.length >= 2) {
+                if (args[1].startsWith("^")) {
+                    command += args[1].substring(1);
+                } else {
+                    command += ".*" + args[1];
+                }
+            }
+            String command1[] = {"grep", command, filePath};
+            try {
+                p = Runtime.getRuntime().exec(command1);
+            } catch (IOException e1) {
+                e1.printStackTrace();
+                Cleanup();
+                state = INVALID;
+                return null;
+            }
 
 			System.out.println("GrepCore: Command " + command);
 			pin = new BufferedReader(new InputStreamReader(p.getInputStream()));
